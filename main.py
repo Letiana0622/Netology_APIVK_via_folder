@@ -1,9 +1,11 @@
 
 import requests
 import time
+import datetime
 from pprint import pprint
 import os
 import json
+import os.path
 with open('token.txt', 'r') as f:
     vk_token = f.read().strip()
 
@@ -53,9 +55,9 @@ def main():
                         max_size_photo[photo['likes']['count']] = size['url']
                         photos_info['file_name'] = f"{photo['likes']['count']}.jpg"
                     else:
-                        max_size_photo[f"{photo['likes']['count']} + {time.ctime(photo['date'])}"] = size['url']
-                        photos_info['file_name'] = f"{photo['likes']['count']}+{time.ctime(photo['date'])}.jpg"
-
+                        max_size_photo[f"{photo['likes']['count']}{photo['date']}"] = size['url']
+                        photos_info['file_name'] = f"{photo['likes']['count']}{photo['date']}.jpg"
+                        # photos_info['file_name'] = f"{photo['likes']['count']}.jpg"
                     photos_info['size'] = size['type']
                     photos.append(photos_info)
 
@@ -69,7 +71,7 @@ def main():
 
             with open("photos.json", "w") as f:
                 json.dump(photos, f, indent=4)
-
+            # pprint(photo)
             pprint(photos)
             pprint(max_size_photo)
 
@@ -84,41 +86,39 @@ def main():
             params = {'path': f'{folder_name}',
                       'overwrite': 'false'}
             response = requests.put(url=url, headers=headers, params=params)
-            return response
+            print(response)
 
-        def upload(self, file_path: str):
+        def upload(self, files_path: str):
             url = f'https://cloud-api.yandex.net/v1/disk/resources/upload'
             headers = {'Content-Type': 'application/json',
-                       'Authorization': f'OAuth {ya_token}'}
-            params = {'path': f'{folder_name}',
+                        'Authorization': f'OAuth {ya_token}'}
+            params = {'path': ya_files_path,
                       'overwrite': 'true'}
-
             response = requests.get(url=url, headers=headers, params=params)
-            ya_folder_link = response.json().get('href')
-
-            uploader = requests.put(ya_folder_link, data=open(files_path, 'rb'))
-
-            return uploader
+            href = response.json().get('href')
+            uploader = requests.put(href, data=open(files_path, 'rb'))
+            print(uploader)
 
     user_id = str(input('Введите id пользователя VK: '))
     # user_id = ''
     downloader = VkDownloader(vk_token)
     downloader.get_all_photos()
-    # control_point = downloader.get_photos()
-    # pprint(control_point)
-
-    ya_token = str(input('Введите ваш токен ЯндексДиск: '))
     # ya_token = ''
-    uploader = YaUploader(ya_token)
+    ya_token = str(input('Введите ваш токен ЯндексДиск: '))
     folder_name = str(input('Введите имя папки на Яндекс диске, в которую необходимо сохранить фото: '))
+    uploader = YaUploader(ya_token)
     uploader.folder_creation()
-    photos_list = os.listdir('images_vk')
+    folder_path = os.path.join(os.getcwd(),folder_name)
+    print(folder_path)
+    photos_list = os.listdir(folder_path)
     print(photos_list)
     count = 0
     for photo in photos_list:
-        files_path = os.getcwd() + '/images_vk/' + photo
+        files_path = os.path.join(os.getcwd(), folder_name, photo)
+        ya_path = 'https://disk.yandex.ru/client/disk/'
+        ya_files_path = os.path.join(ya_path, folder_name, photo)
+        print(ya_files_path)
         print(files_path)
-        os.path.isfile(files_path)
         uploader.upload(files_path)
         count += 1
         print(f'Фотографий загружено на Яндекс диск: {count}')
