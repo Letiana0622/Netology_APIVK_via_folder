@@ -1,127 +1,125 @@
-
 import requests
 import time
 import datetime
 from pprint import pprint
+from tqdm import tqdm
 import os
 import json
 import os.path
+
 with open('token.txt', 'r') as f:
     vk_token = f.read().strip()
 
+class VkDownloader:
+
+    def __init__(self, token, user_id):
+        self.token = token
+        self.user_id = user_id
+
+    def get_photos(self, offset=0, count=5):
+        url = 'https://api.vk.com/method/photos.get'
+        params = {
+            'owner_id': self.user_id,
+            'album_id': 'wall',
+            'access_token': vk_token,
+            'v': '5.131',
+            'extended': '1',
+            'photo_sizes': '1',
+            'count': count,
+            'offset': offset
+            }
+        res = requests.get(url=url, params=params)
+        return res.json()
+
+    def get_all_photos(self):
+        data = self.get_photos()
+        all_photo_count = data['response']['count']
+        i = 0
+        count = 5
+        photos = []
+        max_size_photo = {}
+
+        if not os.path.exists('images_vk'):
+            os.mkdir('images_vk')
+
+        while i <= all_photo_count:
+            if i != 0:
+                data = self.get_photos(offset=i, count=count)
+
+            for photo in data['response']['items']:
+                max_size = 0
+                photos_info = {}
+                for size in photo['sizes']:
+                    if size['height'] >= max_size:
+                        max_size = size['height']
+                if photo['likes']['count'] not in max_size_photo.keys():
+                    max_size_photo[photo['likes']['count']] = size['url']
+                    photos_info['file_name'] = f"{photo['likes']['count']}.jpg"
+                else:
+                    max_size_photo[f"{photo['likes']['count']}{photo['date']}"] = size['url']
+                    photos_info['file_name'] = f"{photo['likes']['count']}{photo['date']}.jpg"
+                    # photos_info['file_name'] = f"{photo['likes']['count']}.jpg"
+                photos_info['size'] = size['type']
+                photos.append(photos_info)
+
+            for photo_name, photo_url in max_size_photo.items():
+                with open('images_vk/%s' % f'{photo_name}.jpg', 'wb') as file:
+                    img = requests.get(photo_url)
+                    file.write(img.content)
+
+            print(f'Загружено {len(max_size_photo)} фото')
+            i += count
+
+        with open("photos.json", "w") as f:
+            json.dump(photos, f, indent=4)
+        # pprint(photo)
+        pprint(photos)
+        pprint(max_size_photo)
+
+class YaUploader:
+    def __init__(self, token: str):
+        self.token = token
+
+    def folder_creation(self, folder_name):
+        url = f'https://cloud-api.yandex.net/v1/disk/resources/'
+        headers = {'Content-Type': 'application/json',
+                    'Authorization': f'OAuth {self.token}'}
+        params = {'path': f'{folder_name}',
+                    'overwrite': 'false'}
+        response = requests.put(url=url, headers=headers, params=params)
+        print(response)
+
+    def upload(self, disk_file_path: str, local_file_path: str):
+        url = f'https://cloud-api.yandex.net/v1/disk/resources/upload'
+        headers = {'Content-Type': 'application/json',
+                    'Authorization': f'OAuth {self.token}'}
+        params = {'path': disk_file_path,
+                    'overwrite': 'true'}
+        response = requests.get(url=url, headers=headers, params=params)
+        href = response.json().get('href')
+        uploader = requests.put(href, data=open(local_file_path, 'rb'))
+        print(uploader)
+
 def main():
-    class VkDownloader:
-
-        def __init__(self, token):
-            self.token = token
-
-        def get_photos(self, offset=0, count=5):
-
-            url = 'https://api.vk.com/method/photos.get'
-            params = {'owner_id': user_id,
-                      'album_id': 'wall',
-                      'access_token': vk_token,
-                      'v': '5.131',
-                      'extended': '1',
-                      'photo_sizes': '1',
-                      'count': count,
-                      'offset': offset
-                      }
-            res = requests.get(url=url, params=params)
-            return res.json()
-
-        def get_all_photos(self):
-            data = self.get_photos()
-            all_photo_count = data['response']['count']
-            i = 0
-            count = 5
-            photos = []
-            max_size_photo = {}
-
-            if not os.path.exists('images_vk'):
-                os.mkdir('images_vk')
-
-            while i <= all_photo_count:
-                if i != 0:
-                    data = self.get_photos(offset=i, count=count)
-
-                for photo in data['response']['items']:
-                    max_size = 0
-                    photos_info = {}
-                    for size in photo['sizes']:
-                        if size['height'] >= max_size:
-                            max_size = size['height']
-                    if photo['likes']['count'] not in max_size_photo.keys():
-                        max_size_photo[photo['likes']['count']] = size['url']
-                        photos_info['file_name'] = f"{photo['likes']['count']}.jpg"
-                    else:
-                        max_size_photo[f"{photo['likes']['count']}{photo['date']}"] = size['url']
-                        photos_info['file_name'] = f"{photo['likes']['count']}{photo['date']}.jpg"
-                        # photos_info['file_name'] = f"{photo['likes']['count']}.jpg"
-                    photos_info['size'] = size['type']
-                    photos.append(photos_info)
-
-                for photo_name, photo_url in max_size_photo.items():
-                    with open('images_vk/%s' % f'{photo_name}.jpg', 'wb') as file:
-                        img = requests.get(photo_url)
-                        file.write(img.content)
-
-                print(f'Загружено {len(max_size_photo)} фото')
-                i += count
-
-            with open("photos.json", "w") as f:
-                json.dump(photos, f, indent=4)
-            # pprint(photo)
-            pprint(photos)
-            pprint(max_size_photo)
-
-    class YaUploader:
-        def __init__(self, token: str):
-            self.token = token
-
-        def folder_creation(self):
-            url = f'https://cloud-api.yandex.net/v1/disk/resources/'
-            headers = {'Content-Type': 'application/json',
-                       'Authorization': f'OAuth {ya_token}'}
-            params = {'path': f'{folder_name}',
-                      'overwrite': 'false'}
-            response = requests.put(url=url, headers=headers, params=params)
-            print(response)
-
-        def upload(self, files_path: str):
-            url = f'https://cloud-api.yandex.net/v1/disk/resources/upload'
-            headers = {'Content-Type': 'application/json',
-                        'Authorization': f'OAuth {ya_token}'}
-            params = {'path': ya_files_path,
-                      'overwrite': 'true'}
-            response = requests.get(url=url, headers=headers, params=params)
-            href = response.json().get('href')
-            uploader = requests.put(href, data=open(files_path, 'rb'))
-            print(uploader)
-
     user_id = str(input('Введите id пользователя VK: '))
-    # user_id = ''
-    downloader = VkDownloader(vk_token)
+    downloader = VkDownloader(vk_token, user_id)
     downloader.get_all_photos()
-    # ya_token = ''
     ya_token = str(input('Введите ваш токен ЯндексДиск: '))
     folder_name = str(input('Введите имя папки на Яндекс диске, в которую необходимо сохранить фото: '))
     uploader = YaUploader(ya_token)
-    uploader.folder_creation()
-    folder_path = os.path.join(os.getcwd(),folder_name)
-    print(folder_path)
-    photos_list = os.listdir(folder_path)
+    uploader.folder_creation(folder_name)
+    local_folder_path = os.path.join(os.getcwd(), 'images_vk')
+    print(local_folder_path)
+    photos_list = os.listdir(local_folder_path)
     print(photos_list)
+    ya_photos_limit = str(input('Введите количество фото для загрузки на ядиск: '))
     count = 0
-    for photo in photos_list:
-        files_path = os.path.join(os.getcwd(), folder_name, photo)
-        ya_path = 'https://disk.yandex.ru/client/disk/'
-        ya_files_path = os.path.join(ya_path, folder_name, photo)
-        print(ya_files_path)
-        print(files_path)
-        uploader.upload(files_path)
-        count += 1
-        print(f'Фотографий загружено на Яндекс диск: {count}')
+    for photo in tqdm(photos_list):
+        while count <= ya_photos_limit:
+            local_file_path = os.path.join(os.getcwd(), 'images_vk', photo)
+            disk_path = f'{folder_name}/{photo}'
+            uploader.upload(disk_path, local_file_path)
+            count += 1
 
 if __name__ == '__main__':
     main()
